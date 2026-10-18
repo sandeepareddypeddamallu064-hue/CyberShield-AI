@@ -21,7 +21,7 @@ const initialAlerts = [
   { id:'CS-1043', time:'12:19:37', type:'Policy Violation', source:'10.0.1.55', target:'File Server', severity:'Low', score:24, status:'Resolved', detail:'A simulated access event does not match the example access policy.', action:'Confirm the user role and update access policy only if the request is approved.' },
   { id:'CS-1042', time:'12:14:21', type:'DNS Anomaly', source:'10.0.8.11', target:'DNS Resolver', severity:'Medium', score:54, status:'New', detail:'The sample log contains an unusual DNS request pattern.', action:'Review DNS query history and block the domain only after validating threat intelligence.' }
 ];
-const API_URL = 'http://127.0.0.1:8000';
+const API_URL = 'https://cybershield-ai-g8cz.onrender.com';
 
 function convertBackendEvent(event) {
   const severity = ['Critical', 'High', 'Medium', 'Low'].includes(
