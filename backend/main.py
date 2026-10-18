@@ -33,6 +33,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "https://stately-pastelito-d53cf3.netlify.app",
         "https://shiny-sable-775251.netlify.app",
+        "https://cybershield-ai-beats.netlify.app",
     ],
     allow_credentials=False,
     allow_methods=["*"],
