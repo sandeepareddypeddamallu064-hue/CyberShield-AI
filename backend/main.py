@@ -18,8 +18,13 @@ from pydantic import BaseModel
 app = FastAPI(
     title="CyberShield AI API",
     description="Security event monitoring and ML-based threat detection",
-    version="1.2.0",
+    version="1.2.1",
 )
+
+
+# --------------------------------------------------
+# 2. CORS CONFIGURATION
+# --------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +32,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "https://stately-pastelito-d53cf3.netlify.app",
+        "https://shiny-sable-775251.netlify.app",
     ],
     allow_credentials=False,
     allow_methods=["*"],
@@ -35,7 +41,7 @@ app.add_middleware(
 
 
 # --------------------------------------------------
-# 2. PROJECT PATHS AND DATABASE
+# 3. PROJECT PATHS AND DATABASE
 # --------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,6 +54,7 @@ DATABASE_PATH = BASE_DIR / "cybershield.db"
 
 def initialize_database():
     """Create the prediction-history table if it does not exist."""
+
     with sqlite3.connect(DATABASE_PATH) as connection:
         connection.execute(
             """
@@ -71,7 +78,7 @@ print(f"Prediction database ready: {DATABASE_PATH}")
 
 
 # --------------------------------------------------
-# 3. LOAD TRAINED MACHINE LEARNING MODEL
+# 4. LOAD TRAINED MACHINE LEARNING MODEL
 # --------------------------------------------------
 
 model = None
@@ -81,15 +88,18 @@ try:
     if MODEL_PATH.exists() and FEATURE_PATH.exists():
         model = joblib.load(MODEL_PATH)
         feature_names = joblib.load(FEATURE_PATH)
+
         print("Random Forest model loaded successfully!")
+
     else:
         print("WARNING: Trained model files were not found.")
+
 except Exception as exc:
     print(f"WARNING: Could not load model: {exc}")
 
 
 # --------------------------------------------------
-# 4. HELPER FUNCTIONS
+# 5. HELPER FUNCTIONS
 # --------------------------------------------------
 
 def calculate_risk_score(severity: str) -> int:
@@ -99,11 +109,13 @@ def calculate_risk_score(severity: str) -> int:
         "Medium": 55,
         "Low": 25,
     }
+
     return risk_scores.get(severity.capitalize(), 55)
 
 
 def save_prediction(result: dict) -> int:
     """Save a successful model prediction and return its database ID."""
+
     with sqlite3.connect(DATABASE_PATH) as connection:
         cursor = connection.execute(
             """
@@ -128,12 +140,14 @@ def save_prediction(result: dict) -> int:
                 result["timestamp"],
             ),
         )
+
         connection.commit()
+
         return cursor.lastrowid
 
 
 # --------------------------------------------------
-# 5. REQUEST MODELS
+# 6. REQUEST MODELS
 # --------------------------------------------------
 
 class SecurityEvent(BaseModel):
@@ -148,16 +162,17 @@ class PredictionRequest(BaseModel):
 
 
 # --------------------------------------------------
-# 6. IN-MEMORY SECURITY EVENT STORAGE
-# Note: security events reset when the backend restarts.
-# Prediction history is stored persistently in SQLite.
+# 7. SECURITY EVENT STORAGE
 # --------------------------------------------------
+
+# Events reset when the backend restarts.
+# Prediction history is stored in SQLite.
 
 events = []
 
 
 # --------------------------------------------------
-# 7. BASIC ENDPOINTS
+# 8. BASIC ENDPOINTS
 # --------------------------------------------------
 
 @app.get("/")
@@ -178,7 +193,7 @@ def health():
 
 
 # --------------------------------------------------
-# 8. GET SECURITY EVENTS
+# 9. GET SECURITY EVENTS
 # --------------------------------------------------
 
 @app.get("/api/events")
@@ -190,15 +205,18 @@ def get_events():
 
 
 # --------------------------------------------------
-# 9. CREATE SECURITY EVENT
+# 10. CREATE SECURITY EVENT
 # --------------------------------------------------
 
 @app.post("/api/events")
 def create_event(event: SecurityEvent):
     new_event = event.model_dump()
+
     new_event["id"] = len(events) + 1
     new_event["timestamp"] = datetime.now(timezone.utc).isoformat()
-    new_event["risk_score"] = calculate_risk_score(new_event["severity"])
+    new_event["risk_score"] = calculate_risk_score(
+        new_event["severity"]
+    )
 
     events.insert(0, new_event)
 
@@ -209,11 +227,12 @@ def create_event(event: SecurityEvent):
 
 
 # --------------------------------------------------
-# 10. MACHINE LEARNING PREDICTION
+# 11. MACHINE LEARNING PREDICTION
 # --------------------------------------------------
 
 @app.post("/api/predict")
 def predict_attack(request: PredictionRequest):
+
     if model is None or feature_names is None:
         raise HTTPException(
             status_code=503,
@@ -221,7 +240,8 @@ def predict_attack(request: PredictionRequest):
         )
 
     missing_features = [
-        name for name in feature_names
+        name
+        for name in feature_names
         if name not in request.features
     ]
 
@@ -237,14 +257,23 @@ def predict_attack(request: PredictionRequest):
 
     try:
         input_data = pd.DataFrame(
-            [[request.features[name] for name in feature_names]],
+            [
+                [
+                    request.features[name]
+                    for name in feature_names
+                ]
+            ],
             columns=feature_names,
         )
 
         prediction = str(model.predict(input_data)[0])
+
         probabilities = model.predict_proba(input_data)[0]
         classes = list(model.classes_)
-        confidence = float(probabilities[classes.index(prediction)])
+
+        confidence = float(
+            probabilities[classes.index(prediction)]
+        )
 
     except Exception as exc:
         raise HTTPException(
@@ -271,14 +300,14 @@ def predict_attack(request: PredictionRequest):
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Persist each successful prediction in SQLite.
+    # Save each successful prediction in SQLite.
     result["id"] = save_prediction(result)
 
     return result
 
 
 # --------------------------------------------------
-# 11. GET DATASET TEST PAYLOAD
+# 12. GET DATASET TEST PAYLOAD
 # --------------------------------------------------
 
 @app.get("/api/test-payload")
@@ -294,6 +323,7 @@ def get_test_payload():
     try:
         with open(payload_path, "r", encoding="utf-8") as file:
             return json.load(file)
+
     except (OSError, json.JSONDecodeError) as exc:
         raise HTTPException(
             status_code=500,
@@ -302,11 +332,12 @@ def get_test_payload():
 
 
 # --------------------------------------------------
-# 12. GET PREDICTION HISTORY
+# 13. GET PREDICTION HISTORY
 # --------------------------------------------------
 
 @app.get("/api/predictions")
 def get_prediction_history(limit: int = 100):
+
     if limit < 1 or limit > 500:
         raise HTTPException(
             status_code=400,
@@ -315,6 +346,7 @@ def get_prediction_history(limit: int = 100):
 
     with sqlite3.connect(DATABASE_PATH) as connection:
         connection.row_factory = sqlite3.Row
+
         rows = connection.execute(
             """
             SELECT
@@ -334,6 +366,7 @@ def get_prediction_history(limit: int = 100):
         ).fetchall()
 
     predictions = []
+
     for row in rows:
         item = dict(row)
         item["is_attack"] = bool(item["is_attack"])
